@@ -369,448 +369,148 @@ body {
 .guide-item { font-size: 13px; color: #78350F; margin-bottom: 6px; }
 .guide-label { font-weight: 700; }
 </style>
+</style>
 </head>
 <body>
 
-<div class="container" id="app"></div>
+<div class="container" id="app">
+  <div class="header"><h1>Invert Sports Centre</h1><p>School Program Pricing Calculator</p></div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-calculator" onclick="switchTab('calculator')">Quote Builder</button>
+    <button class="tab-btn" id="tab-rates" onclick="switchTab('rates')">Rate Card</button>
+    <button class="tab-btn" id="tab-guide" onclick="switchTab('guide')">Quick Guide</button>
+  </div>
+  <div class="tab-content" id="content-rates"></div>
+  <div class="tab-content" id="content-guide"></div>
+  <div class="tab-content active" id="content-calculator">
+    <div class="two-col">
+      <div class="col">
+        <div class="card">
+          <h3>School Details</h3>
+          <div class="field"><label>School Name</label><input type="text" id="in-schoolName" oninput="updVal('schoolName',this.value)" placeholder="e.g. Crookwell Public School"></div>
+          <div class="field"><label>Program</label><select id="in-program" onchange="updVal('program',this.value)"></select></div>
+          <div class="field"><label>Total Students</label><input type="number" id="in-totalStudents" value="25" min="1" oninput="updNum('totalStudents',this,1)"></div>
+          <div class="field"><label>Sessions per Day (classes)</label><input type="number" id="in-sessionsPerDay" value="1" min="1" max="12" oninput="updNum('sessionsPerDay',this,1)"></div>
+          <div class="field"><label>Days per Week at School</label><input type="number" id="in-daysPerWeek" value="1" min="1" max="5" oninput="updNum('daysPerWeek',this,1)"></div>
+          <div class="field"><label>Weeks in Term</label><input type="number" id="in-weeksInTerm" value="8" min="1" max="12" oninput="updNum('weeksInTerm',this,1)"></div>
+          <div class="field"><label>Session Length (min)</label><input type="number" id="in-sessionLength" value="45" min="15" max="90" step="5" oninput="updNum('sessionLength',this,15)"></div>
+          <label class="checkbox-field"><input type="checkbox" id="in-useCustomSessions" onchange="toggleCustomSessions(this.checked)"><span>Custom sessions per student (e.g. rotating classes)</span></label>
+          <div id="customSessionsFields" style="display:none">
+            <div class="field"><label>Sessions Each Student Receives</label><input type="number" id="in-sessionsPerStudent" value="8" min="1" oninput="updNum('sessionsPerStudent',this,1)"></div>
+            <p class="helper-text" id="customSessionsHelper"></p>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Travel & Location</h3>
+          <div class="field"><label>One-Way Distance (km)</label><input type="number" id="in-distanceKm" value="10" min="0" oninput="updNum('distanceKm',this,0)"></div>
+          <label class="checkbox-field"><input type="checkbox" id="in-isAtCentre" onchange="updCheck('isAtCentre',this.checked)"><span>School comes to Invert Sports Centre (no travel)</span></label>
+        </div>
+        <div class="card">
+          <h3>Options & Discounts</h3>
+          <label class="checkbox-field"><input type="checkbox" id="in-isRepeatCustomer" onchange="updCheck('isRepeatCustomer',this.checked)"><span>Repeat Customer (5% discount)</span></label>
+          <label class="checkbox-field"><input type="checkbox" id="in-needsSecondInstructor" onchange="toggleSecondInstructor(this.checked)"><span>Requires Second Instructor</span></label>
+          <div id="secondInstructorFields" style="display:none">
+            <div class="field"><label>Instructor Hours/Day</label><input type="number" id="in-instructorHoursPerDay" value="6" min="1" max="10" oninput="updNum('instructorHoursPerDay',this,1)"></div>
+          </div>
+          <label class="checkbox-field"><input type="checkbox" id="in-includesCertificates" checked onchange="updCheck('includesCertificates',this.checked)"><span>Include Completion Certificates</span></label>
+          <div class="field"><label>Sporting Schools Grant ($)</label><input type="number" id="in-grantAmount" value="0" min="0" step="100" oninput="updNum('grantAmount',this,0,true)"></div>
+        </div>
+        <div class="card override-card" id="overrideCard">
+          <h3 id="overrideTitle" style="color:#0f3460">Price Override — "What If?"</h3>
+          <label class="checkbox-field"><input type="checkbox" id="in-usePriceOverride" onchange="toggleOverride(this.checked)"><span>Override the calculated quote with a custom price</span></label>
+          <div id="overrideFields" style="display:none">
+            <div class="field"><label>Desired Total Price (GST inc.)</label><input type="number" id="in-priceOverride" value="0" min="0" step="50" oninput="updNum('priceOverride',this,0,true)"></div>
+            <div class="override-diff" id="overrideDiff"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col" id="resultsColumn"></div>
+    </div>
+  </div>
+</div>
 
 <script>
-/* ============================================================
-   ★★★ CONFIGURATION — EDIT THESE VALUES WHEN COSTS CHANGE ★★★
-   ============================================================
-   
-   All rates are GST INCLUSIVE.
-   Last updated: April 2026
-   
-   When updating:
-   - Fuel price changes → update FUEL_TANK_LITRES, FUEL_RANGE_KM, or DIESEL_PRICE_PER_LITRE
-   - CPI increase → update program rates and/or SMALL_SCHOOL_MINIMUM_PER_DAY
-   - Staff pay changes → update SECOND_INSTRUCTOR_HOURLY_RATE
-   - Meal costs change → update MEAL_COST_PER_DAY
-   ============================================================ */
-
-const CONFIG = {
-  // --- PROGRAM RATES ($ per student per session, GST inclusive) ---
-  programs: {
-    gymnastics:  { label: "Gymnastics",   rate: 5.50, equipmentMinutes: 75, color: "#E85D3A" },
-    volleyball:  { label: "Volleyball",   rate: 4.80, equipmentMinutes: 30, color: "#3A8BE8" },
-    lacrosse:    { label: "Lacrosse",     rate: 4.80, equipmentMinutes: 30, color: "#3AAE5C" },
-    athletics:   { label: "Athletics",    rate: 4.00, equipmentMinutes: 10, color: "#E8B83A" },
-    multisport:  { label: "Multi-Sport",  rate: 5.20, equipmentMinutes: 50, color: "#9B59B6" },
-  },
-
-  // --- FUEL / VEHICLE ---
-  FUEL_TANK_LITRES: 70,          // Tank size in litres
-  FUEL_RANGE_KM: 750,            // Km per full tank
-  DIESEL_PRICE_PER_LITRE: 3.20,  // Current diesel price
-
-  // --- STAFF & ADMIN ---
-  SECOND_INSTRUCTOR_HOURLY_RATE: 28,  // Casual rate for second instructor
-  ADMIN_HOURLY_RATE: 30,              // Admin rate (booking/invoicing)
-  ADMIN_HOURS_PER_BOOKING: 1.5,       // Hours spent on admin per school booking
-
-  // --- DAILY COSTS ---
-  MEAL_COST_PER_DAY: 30,         // Lunch/meals per person per delivery day
-
-  // --- CERTIFICATES ---
-  CERTIFICATE_COST_PER_STUDENT: 0.10,  // ~$20 per 250 sheets + printing
-
-  // --- DISCOUNTS ---
-  REPEAT_CUSTOMER_DISCOUNT: 0.05,  // 5%
-  IN_CENTRE_DISCOUNT: 0.10,        // 10%
-
-  // --- MINIMUMS ---
-  SMALL_SCHOOL_MINIMUM_PER_DAY: 250,   // Minimum daily charge for schools under 30 students
-  SMALL_SCHOOL_THRESHOLD: 30,          // Student count below which minimum applies
-
-  // --- AD HOC SERVICES ---
-  CARNIVAL_ASSISTANCE_DAY_RATE: 400,
-
-  // --- DISTANCE BANDS (for rate card display only) ---
-  distanceBands: [
-    { label: "Local (Goulburn, <15 min)",     maxKm: 15,  key: "local" },
-    { label: "Near (15–30 min, ~25–40 km)",   maxKm: 40,  key: "near" },
-    { label: "Mid (30–45 min, ~40–60 km)",    maxKm: 60,  key: "mid" },
-    { label: "Far (45–60 min, ~60–80 km)",    maxKm: 80,  key: "far" },
-  ],
-};
-
-// Computed from config
-const FUEL_COST_PER_KM = (CONFIG.FUEL_TANK_LITRES / CONFIG.FUEL_RANGE_KM) * CONFIG.DIESEL_PRICE_PER_LITRE;
-const ADMIN_COST = CONFIG.ADMIN_HOURLY_RATE * CONFIG.ADMIN_HOURS_PER_BOOKING;
-
-/* ============================================================
-   APPLICATION CODE — You shouldn't need to edit below this line
-   ============================================================ */
-
-// State
-const state = {
-  schoolName: '',
-  program: 'gymnastics',
-  totalStudents: 25,
-  sessionsPerDay: 1,
-  daysPerWeek: 1,
-  weeksInTerm: 8,
-  sessionLength: 45,
-  distanceKm: 10,
-  needsSecondInstructor: false,
-  instructorHoursPerDay: 6,
-  isRepeatCustomer: false,
-  isAtCentre: false,
-  includesCertificates: true,
-  grantAmount: 0,
-  useCustomSessions: false,
-  sessionsPerStudent: 8,
-  usePriceOverride: false,
-  priceOverride: 0,
-  activeTab: 'calculator',
-};
-
-function fmt(val) { return '$' + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-function fmtPct(val) { return val.toFixed(1) + '%'; }
-
-function calculate() {
-  const prog = CONFIG.programs[state.program];
-  const totalDeliveryDays = state.daysPerWeek * state.weeksInTerm;
-  const roundTripKm = state.distanceKm * 2;
-
-  // Costs
-  const fuelPerTrip = state.isAtCentre ? 0 : roundTripKm * FUEL_COST_PER_KM;
-  const totalFuel = fuelPerTrip * totalDeliveryDays;
-  const totalMeals = CONFIG.MEAL_COST_PER_DAY * totalDeliveryDays * (state.needsSecondInstructor ? 2 : 1);
-  const secondInstructorCost = state.needsSecondInstructor
-    ? CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE * state.instructorHoursPerDay * totalDeliveryDays : 0;
-  const certificateCost = state.includesCertificates ? state.totalStudents * CONFIG.CERTIFICATE_COST_PER_STUDENT : 0;
-  const totalDirectCosts = totalFuel + totalMeals + ADMIN_COST + secondInstructorCost + certificateCost;
-
-  // Revenue
-  const actualSessionsPerStudent = state.useCustomSessions ? state.sessionsPerStudent : state.weeksInTerm;
-  const baseStudentRevenue = prog.rate * state.totalStudents * actualSessionsPerStudent;
-  const travelFeePerDay = state.isAtCentre ? 0 : Math.max(fuelPerTrip * 1.5, 15);
-  const totalTravelFee = travelFeePerDay * totalDeliveryDays;
-
-  // Small school minimum
-  const dailyRevenueCheck = (baseStudentRevenue + totalTravelFee) / totalDeliveryDays;
-  const needsMinimumAdjustment = dailyRevenueCheck < CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY && state.totalStudents < CONFIG.SMALL_SCHOOL_THRESHOLD;
-  const subtotal = needsMinimumAdjustment ? CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY * totalDeliveryDays : baseStudentRevenue + totalTravelFee;
-
-  // Discounts
-  let discountRate = 0, discountLabel = '';
-  if (state.isAtCentre) { discountRate = CONFIG.IN_CENTRE_DISCOUNT; discountLabel = 'In-Centre Discount (10%)'; }
-  if (state.isRepeatCustomer) {
-    discountRate += CONFIG.REPEAT_CUSTOMER_DISCOUNT;
-    discountLabel = discountLabel ? discountLabel + ' + Repeat Customer (5%)' : 'Repeat Customer Discount (5%)';
-  }
-  const discountAmount = subtotal * discountRate;
-  const totalQuote = subtotal - discountAmount;
-  const gstAmount = totalQuote / 11;
-
-  // Profitability
-  const grossProfit = totalQuote - totalDirectCosts;
-  const profitPerDay = grossProfit / totalDeliveryDays;
-  const margin = totalQuote > 0 ? (grossProfit / totalQuote) * 100 : 0;
-  const effectiveRate = (state.totalStudents > 0 && actualSessionsPerStudent > 0) ? totalQuote / (state.totalStudents * actualSessionsPerStudent) : 0;
-
-  let profitHealth = 'excellent';
-  if (profitPerDay < 200) profitHealth = 'danger';
-  else if (profitPerDay < 400) profitHealth = 'warning';
-  else if (profitPerDay < 600) profitHealth = 'good';
-
-  // Grant
-  const schoolTopUp = Math.max(0, totalQuote - state.grantAmount);
-  const grantCoversAll = state.grantAmount >= totalQuote;
-
-  // Override
-  const ov = state.priceOverride;
-  const ovGrossProfit = ov - totalDirectCosts;
-  const ovProfitPerDay = totalDeliveryDays > 0 ? ovGrossProfit / totalDeliveryDays : 0;
-  const ovMargin = ov > 0 ? (ovGrossProfit / ov) * 100 : 0;
-  const ovEffectiveRate = (state.totalStudents > 0 && actualSessionsPerStudent > 0) ? ov / (state.totalStudents * actualSessionsPerStudent) : 0;
-  const ovGst = ov / 11;
-  const ovDiff = ov - totalQuote;
-  const ovDiffPct = totalQuote > 0 ? (ovDiff / totalQuote) * 100 : 0;
-  let ovProfitHealth = 'excellent';
-  if (ovProfitPerDay < 200) ovProfitHealth = 'danger';
-  else if (ovProfitPerDay < 400) ovProfitHealth = 'warning';
-  else if (ovProfitPerDay < 600) ovProfitHealth = 'good';
-  const ovSchoolTopUp = Math.max(0, ov - state.grantAmount);
-  const ovGrantCoversAll = state.grantAmount >= ov;
-
-  return {
-    totalDeliveryDays, baseStudentRevenue, travelFeePerDay, totalTravelFee,
-    subtotal, discountRate, discountLabel, discountAmount, totalQuote, gstAmount,
-    totalDirectCosts, totalFuel, totalMeals, secondInstructorCost, certificateCost,
-    grossProfit, profitPerDay, margin, effectiveRate, profitHealth,
-    needsMinimumAdjustment, actualSessionsPerStudent, schoolTopUp, grantCoversAll,
-    ovGrossProfit, ovProfitPerDay, ovMargin, ovEffectiveRate, ovGst, ovDiff, ovDiffPct,
-    ovProfitHealth, ovSchoolTopUp, ovGrantCoversAll,
-  };
+const CONFIG={programs:{gymnastics:{label:"Gymnastics",rate:5.50,equipmentMinutes:75,color:"#E85D3A"},volleyball:{label:"Volleyball",rate:4.80,equipmentMinutes:30,color:"#3A8BE8"},lacrosse:{label:"Lacrosse",rate:4.80,equipmentMinutes:30,color:"#3AAE5C"},athletics:{label:"Athletics",rate:4.00,equipmentMinutes:10,color:"#E8B83A"},multisport:{label:"Multi-Sport",rate:5.20,equipmentMinutes:50,color:"#9B59B6"}},FUEL_TANK_LITRES:70,FUEL_RANGE_KM:750,DIESEL_PRICE_PER_LITRE:3.20,SECOND_INSTRUCTOR_HOURLY_RATE:28,ADMIN_HOURLY_RATE:30,ADMIN_HOURS_PER_BOOKING:1.5,MEAL_COST_PER_DAY:30,CERTIFICATE_COST_PER_STUDENT:0.10,REPEAT_CUSTOMER_DISCOUNT:0.05,IN_CENTRE_DISCOUNT:0.10,SMALL_SCHOOL_MINIMUM_PER_DAY:250,SMALL_SCHOOL_THRESHOLD:30,CARNIVAL_ASSISTANCE_DAY_RATE:400,distanceBands:[{label:"Local (Goulburn, <15 min)",maxKm:15},{label:"Near (15\u201330 min, ~25\u201340 km)",maxKm:40},{label:"Mid (30\u201345 min, ~40\u201360 km)",maxKm:60},{label:"Far (45\u201360 min, ~60\u201380 km)",maxKm:80}]};
+const FUEL_COST_PER_KM=(CONFIG.FUEL_TANK_LITRES/CONFIG.FUEL_RANGE_KM)*CONFIG.DIESEL_PRICE_PER_LITRE;
+const ADMIN_COST=CONFIG.ADMIN_HOURLY_RATE*CONFIG.ADMIN_HOURS_PER_BOOKING;
+const S={schoolName:'',program:'gymnastics',totalStudents:25,sessionsPerDay:1,daysPerWeek:1,weeksInTerm:8,sessionLength:45,distanceKm:10,needsSecondInstructor:false,instructorHoursPerDay:6,isRepeatCustomer:false,isAtCentre:false,includesCertificates:true,grantAmount:0,useCustomSessions:false,sessionsPerStudent:8,usePriceOverride:false,priceOverride:0};
+function fmt(v){return '$'+v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function fmtPct(v){return v.toFixed(1)+'%';}
+function calculate(){
+  var p=CONFIG.programs[S.program],td=S.daysPerWeek*S.weeksInTerm,rt=S.distanceKm*2;
+  var fp=S.isAtCentre?0:rt*FUEL_COST_PER_KM,tf=fp*td;
+  var tm=CONFIG.MEAL_COST_PER_DAY*td*(S.needsSecondInstructor?2:1);
+  var si=S.needsSecondInstructor?CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE*S.instructorHoursPerDay*td:0;
+  var cc=S.includesCertificates?S.totalStudents*CONFIG.CERTIFICATE_COST_PER_STUDENT:0;
+  var tc=tf+tm+ADMIN_COST+si+cc;
+  var as=S.useCustomSessions?S.sessionsPerStudent:S.weeksInTerm;
+  var br=p.rate*S.totalStudents*as;
+  var tfd=S.isAtCentre?0:Math.max(fp*1.5,15),ttf=tfd*td;
+  var dr=(br+ttf)/td,nma=dr<CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY&&S.totalStudents<CONFIG.SMALL_SCHOOL_THRESHOLD;
+  var sub=nma?CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY*td:br+ttf;
+  var dR=0,dL='';
+  if(S.isAtCentre){dR=CONFIG.IN_CENTRE_DISCOUNT;dL='In-Centre Discount (10%)';}
+  if(S.isRepeatCustomer){dR+=CONFIG.REPEAT_CUSTOMER_DISCOUNT;dL=dL?dL+' + Repeat Customer (5%)':'Repeat Customer Discount (5%)';}
+  var da=sub*dR,tq=sub-da,ga=tq/11;
+  var gp=tq-tc,ppd=gp/td,m=tq>0?(gp/tq)*100:0;
+  var er=(S.totalStudents>0&&as>0)?tq/(S.totalStudents*as):0;
+  var ph='excellent';if(ppd<200)ph='danger';else if(ppd<400)ph='warning';else if(ppd<600)ph='good';
+  var st=Math.max(0,tq-S.grantAmount),gc=S.grantAmount>=tq;
+  var ov=S.priceOverride,ogp=ov-tc,oppd=td>0?ogp/td:0,om=ov>0?(ogp/ov)*100:0;
+  var oer=(S.totalStudents>0&&as>0)?ov/(S.totalStudents*as):0,og=ov/11;
+  var od=ov-tq,odp=tq>0?(od/tq)*100:0;
+  var oph='excellent';if(oppd<200)oph='danger';else if(oppd<400)oph='warning';else if(oppd<600)oph='good';
+  return{totalDeliveryDays:td,baseStudentRevenue:br,travelFeePerDay:tfd,totalTravelFee:ttf,subtotal:sub,discountRate:dR,discountLabel:dL,discountAmount:da,totalQuote:tq,gstAmount:ga,totalDirectCosts:tc,totalFuel:tf,totalMeals:tm,secondInstructorCost:si,certificateCost:cc,grossProfit:gp,profitPerDay:ppd,margin:m,effectiveRate:er,profitHealth:ph,needsMinimumAdjustment:nma,actualSessionsPerStudent:as,schoolTopUp:st,grantCoversAll:gc,ovGP:ogp,ovPPD:oppd,ovMargin:om,ovER:oer,ovGst:og,ovDiff:od,ovDiffPct:odp,ovPH:oph,ovSchoolTopUp:Math.max(0,ov-S.grantAmount),ovGrantCoversAll:S.grantAmount>=ov};
 }
-
-const healthStyles = {
-  danger:    { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA', label: 'Below Target' },
-  warning:   { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A', label: 'Marginal' },
-  good:      { bg: '#D1FAE5', text: '#065F46', border: '#A7F3D0', label: 'Healthy' },
-  excellent: { bg: '#CFFAFE', text: '#155E75', border: '#A5F3FC', label: 'Excellent' },
-};
-
-function render() {
-  const c = calculate();
-  const prog = CONFIG.programs[state.program];
-  const h = healthStyles[c.profitHealth];
-  const oh = healthStyles[c.ovProfitHealth];
-  const useOv = state.usePriceOverride;
-
-  let html = '';
-
-  // Header
-  html += `<div class="header"><h1>Invert Sports Centre</h1><p>School Program Pricing Calculator</p></div>`;
-
-  // Tabs
-  html += `<div class="tabs">
-    <button class="tab-btn ${state.activeTab === 'calculator' ? 'active' : ''}" onclick="switchTab('calculator')">Quote Builder</button>
-    <button class="tab-btn ${state.activeTab === 'rates' ? 'active' : ''}" onclick="switchTab('rates')">Rate Card</button>
-    <button class="tab-btn ${state.activeTab === 'guide' ? 'active' : ''}" onclick="switchTab('guide')">Quick Guide</button>
-  </div>`;
-
-  // ========== RATE CARD TAB ==========
-  html += `<div class="tab-content ${state.activeTab === 'rates' ? 'active' : ''}">`;
-  html += `<div class="card"><h2>Program Rates (per student per session, GST inclusive)</h2>`;
-  for (const [key, p] of Object.entries(CONFIG.programs)) {
-    html += `<div class="rate-item">
-      <div><span class="rate-dot" style="background:${p.color}"></span><span class="rate-label">${p.label}</span></div>
-      <div><span class="rate-meta">~${p.equipmentMinutes} min equip. time</span><span class="rate-price" style="color:${p.color}">${fmt(p.rate)}</span></div>
-    </div>`;
-  }
-  html += `</div>`;
-
-  html += `<div class="card"><h2>Travel & Delivery Fees</h2>
-    <p style="font-size:13px;color:#64748b;margin-bottom:12px">Charged per delivery day across the term. Based on round-trip distance × ~$${(FUEL_COST_PER_KM * 1.5).toFixed(2)}/km (fuel + vehicle wear).</p>`;
-  for (const band of CONFIG.distanceBands) {
-    const fee = Math.max(band.maxKm * 2 * FUEL_COST_PER_KM * 1.5, 15);
-    html += `<div class="rate-item"><span style="font-weight:500;font-size:14px">${band.label}</span><span style="font-weight:600">~${fmt(fee)}/day</span></div>`;
-  }
-  html += `</div>`;
-
-  html += `<div class="card"><h2>Discounts & Adjustments</h2>`;
-  const adjustments = [
-    { label: 'Repeat Customer Discount', value: '5% off total', note: 'For returning schools with 2+ terms history' },
-    { label: 'In-Centre Delivery', value: '10% off total', note: 'School travels to Invert Sports Centre' },
-    { label: 'Small School Minimum', value: `${fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)}/day`, note: `Minimum daily rate for schools under ${CONFIG.SMALL_SCHOOL_THRESHOLD} students` },
-    { label: 'Second Instructor', value: `$${CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE}/hr added`, note: 'Required for 150+ student programs' },
-    { label: 'Completion Certificates', value: `~${fmt(CONFIG.CERTIFICATE_COST_PER_STUDENT)}/student`, note: 'Gymnastics programs, included by default' },
-  ];
-  for (const a of adjustments) {
-    html += `<div class="rate-item" style="flex-direction:column;align-items:stretch">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-weight:600;font-size:14px">${a.label}</span><span style="font-weight:600;color:#0f3460">${a.value}</span>
-      </div>
-      <p style="margin:4px 0 0;font-size:12px;color:#94a3b8">${a.note}</p>
-    </div>`;
-  }
-  html += `</div>`;
-
-  html += `<div class="card"><h2>Ad Hoc Services</h2>
-    <div class="rate-item"><span style="font-weight:600">Athletics Carnival Assistance</span><span style="font-weight:700;color:#E8B83A">${fmt(CONFIG.CARNIVAL_ASSISTANCE_DAY_RATE)}/day</span></div>
-    <div class="rate-item"><span style="font-weight:600">Teacher Professional Development</span><span style="font-weight:600;color:#64748b">Quote on request</span></div>
-    <div class="rate-item"><span style="font-weight:600">Combined Schools Sports Day</span><span style="font-weight:600;color:#64748b">Quote on request</span></div>
-  </div>`;
-  html += `</div>`;
-
-  // ========== QUICK GUIDE TAB ==========
-  html += `<div class="tab-content ${state.activeTab === 'guide' ? 'active' : ''}">`;
-  html += `<div class="card"><h2>How the Pricing Works</h2><div class="info-text">
-    <p><strong>The formula:</strong> (Program Rate × Students × Sessions) + (Travel Fee × Delivery Days) − Discounts = Total Quote</p>
-    <p><strong>Program Rate</strong> covers the coaching, curriculum, and equipment for each sport. Gymnastics costs the most because of equipment transport and setup time (~75 min extra per visit). Athletics costs the least because schools supply most equipment.</p>
-    <p><strong>Travel Fee</strong> covers fuel (at ~$${FUEL_COST_PER_KM.toFixed(2)}/km) with a markup for vehicle wear. This is per delivery day — so a school you visit once a week for 10 weeks pays 10× the daily travel fee.</p>
-    <p><strong>Small School Minimum:</strong> Schools under ${CONFIG.SMALL_SCHOOL_THRESHOLD} students are charged a minimum of ${fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)}/delivery day. Without this floor, tiny remote schools would cost more to service than they generate.</p>
-    <p><strong>Sporting Schools Grant:</strong> Enter the school's grant amount to see how much (if anything) they need to top up from their own budget.</p>
-  </div></div>`;
-  html += `<div class="guide-box">
-    <h3>Profitability Guide</h3>
-    <p class="guide-item"><span class="guide-label" style="color:#991B1B">Below $200/day</span> — losing money or breaking even once salary is considered. Avoid unless strategically important.</p>
-    <p class="guide-item"><span class="guide-label" style="color:#92400E">$200–$400/day</span> — marginal. Covers costs but below target. Acceptable for relationship-building.</p>
-    <p class="guide-item"><span class="guide-label" style="color:#065F46">$400–$600/day</span> — healthy. Target range for standard bookings.</p>
-    <p class="guide-item"><span class="guide-label" style="color:#155E75">$600+/day</span> — excellent. Large schools and multi-session days.</p>
-  </div>`;
-  html += `</div>`;
-
-  // ========== CALCULATOR TAB ==========
-  html += `<div class="tab-content ${state.activeTab === 'calculator' ? 'active' : ''}"><div class="two-col">`;
-
-  // Left Column
-  html += `<div class="col">`;
-
-  // School Details
-  html += `<div class="card"><h3>School Details</h3>
-    <div class="field"><label>School Name</label><input type="text" value="${state.schoolName}" oninput="upd('schoolName',this.value)" placeholder="e.g. Crookwell Public School"></div>
-    <div class="field"><label>Program</label><select onchange="upd('program',this.value)">`;
-  for (const [k, v] of Object.entries(CONFIG.programs)) {
-    html += `<option value="${k}" ${state.program === k ? 'selected' : ''}>${v.label} — ${fmt(v.rate)}/student/session</option>`;
-  }
-  html += `</select></div>
-    <div class="field"><label>Total Students</label><input type="number" value="${state.totalStudents}" min="1" oninput="upd('totalStudents',Math.max(1,parseInt(this.value)||0))"></div>
-    <div class="field"><label>Sessions per Day (classes)</label><input type="number" value="${state.sessionsPerDay}" min="1" max="12" oninput="upd('sessionsPerDay',Math.max(1,parseInt(this.value)||0))"></div>
-    <div class="field"><label>Days per Week at School</label><input type="number" value="${state.daysPerWeek}" min="1" max="5" oninput="upd('daysPerWeek',Math.max(1,parseInt(this.value)||0))"></div>
-    <div class="field"><label>Weeks in Term</label><input type="number" value="${state.weeksInTerm}" min="1" max="12" oninput="upd('weeksInTerm',Math.max(1,parseInt(this.value)||0))"></div>
-    <div class="field"><label>Session Length (min)</label><input type="number" value="${state.sessionLength}" min="15" max="90" step="5" oninput="upd('sessionLength',parseInt(this.value)||30)"></div>
-    <label class="checkbox-field"><input type="checkbox" ${state.useCustomSessions ? 'checked' : ''} onchange="upd('useCustomSessions',this.checked)"><span>Custom sessions per student (e.g. rotating classes)</span></label>`;
-  if (state.useCustomSessions) {
-    html += `<div class="field"><label>Sessions Each Student Receives</label><input type="number" value="${state.sessionsPerStudent}" min="1" max="${state.weeksInTerm}" oninput="upd('sessionsPerStudent',Math.max(1,parseInt(this.value)||0))"></div>
-    <p class="helper-text">You deliver ${state.sessionsPerDay} sessions/day for ${state.weeksInTerm} weeks, but each student only attends ${state.sessionsPerStudent} session${state.sessionsPerStudent !== 1 ? 's' : ''}.</p>`;
-  }
-  html += `</div>`;
-
-  // Travel
-  html += `<div class="card"><h3>Travel & Location</h3>
-    <div class="field"><label>One-Way Distance (km)</label><input type="number" value="${state.distanceKm}" min="0" oninput="upd('distanceKm',Math.max(0,parseInt(this.value)||0))"></div>
-    <label class="checkbox-field"><input type="checkbox" ${state.isAtCentre ? 'checked' : ''} onchange="upd('isAtCentre',this.checked)"><span>School comes to Invert Sports Centre (no travel)</span></label>
-  </div>`;
-
-  // Options
-  html += `<div class="card"><h3>Options & Discounts</h3>
-    <label class="checkbox-field"><input type="checkbox" ${state.isRepeatCustomer ? 'checked' : ''} onchange="upd('isRepeatCustomer',this.checked)"><span>Repeat Customer (5% discount)</span></label>
-    <label class="checkbox-field"><input type="checkbox" ${state.needsSecondInstructor ? 'checked' : ''} onchange="upd('needsSecondInstructor',this.checked)"><span>Requires Second Instructor</span></label>`;
-  if (state.needsSecondInstructor) {
-    html += `<div class="field"><label>Instructor Hours/Day</label><input type="number" value="${state.instructorHoursPerDay}" min="1" max="10" oninput="upd('instructorHoursPerDay',Math.max(1,parseInt(this.value)||0))"></div>`;
-  }
-  html += `<label class="checkbox-field"><input type="checkbox" ${state.includesCertificates ? 'checked' : ''} onchange="upd('includesCertificates',this.checked)"><span>Include Completion Certificates</span></label>
-    <div class="field"><label>Sporting Schools Grant ($)</label><input type="number" value="${state.grantAmount}" min="0" step="100" oninput="upd('grantAmount',Math.max(0,parseFloat(this.value)||0))"></div>
-  </div>`;
-
-  // Price Override
-  html += `<div class="card override-card ${state.usePriceOverride ? 'active' : ''}">
-    <h3 style="color:${state.usePriceOverride ? '#9A3412' : '#0f3460'}">Price Override — "What If?"</h3>
-    <label class="checkbox-field"><input type="checkbox" ${state.usePriceOverride ? 'checked' : ''} onchange="toggleOverride(this.checked)"><span>Override the calculated quote with a custom price</span></label>`;
-  if (state.usePriceOverride) {
-    html += `<div class="field"><label>Desired Total Price (GST inc.)</label><input type="number" value="${state.priceOverride}" min="0" step="50" oninput="upd('priceOverride',Math.max(0,parseFloat(this.value)||0))"></div>
-    <div class="override-diff" style="background:${c.ovDiff < 0 ? '#FEE2E2' : '#D1FAE5'};color:${c.ovDiff < 0 ? '#991B1B' : '#065F46'}">
-      ${c.ovDiff < 0 ? fmt(Math.abs(c.ovDiff)) + ' below formula price (' + fmtPct(Math.abs(c.ovDiffPct)) + ' discount)' : c.ovDiff > 0 ? fmt(c.ovDiff) + ' above formula price (+' + fmtPct(c.ovDiffPct) + ')' : 'Matches formula price exactly'}
-    </div>`;
-  }
-  html += `</div>`;
-
-  html += `</div>`; // end left col
-
-  // Right Column
-  html += `<div class="col">`;
-
-  // Quote Box
-  html += `<div class="quote-box"><p class="quote-label">${state.schoolName || 'School'} — ${useOv ? 'Formula vs Override' : 'Total Quote'}</p>`;
-  if (useOv) {
-    html += `<div class="quote-compare">
-      <div class="quote-formula"><div class="label">FORMULA</div><div class="amount">${fmt(c.totalQuote)}</div></div>
-      <div class="quote-override"><div class="label">OVERRIDE</div><div class="amount">${fmt(state.priceOverride)}</div><div class="gst">GST inc. (${fmt(c.ovGst)} GST)</div></div>
-    </div>`;
-  } else {
-    html += `<p class="quote-amount">${fmt(c.totalQuote)}</p><p class="quote-gst">GST inclusive (${fmt(c.gstAmount)} GST)</p>`;
-    if (c.needsMinimumAdjustment) {
-      html += `<div class="notice" style="background:rgba(232,184,58,0.2);border:1px solid rgba(232,184,58,0.3)">Small school minimum applied (${fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)}/day × ${c.totalDeliveryDays} days)</div>`;
-    }
-  }
-  html += `</div>`;
-
-  // Profitability
-  if (useOv) {
-    html += `<div class="profit-box" style="background:${oh.bg};border:1px solid ${oh.border}">
-      <div class="profit-header"><h3 style="margin:0;font-size:15px;font-weight:700;color:${oh.text}">Override Profitability</h3><span class="profit-badge" style="background:${oh.border};color:${oh.text}">${oh.label}</span></div>
-      <div class="metrics-grid">
-        <div class="metric"><div class="metric-label" style="color:${oh.text}">Gross Profit</div><div class="metric-value" style="color:${oh.text}">${fmt(c.ovGrossProfit)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${oh.text}">Profit/Day</div><div class="metric-value" style="color:${oh.text}">${fmt(c.ovProfitPerDay)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${oh.text}">Margin</div><div class="metric-value" style="color:${oh.text}">${fmtPct(c.ovMargin)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${oh.text}">Effective $/Student/Session</div><div class="metric-value" style="color:${oh.text}">${fmt(c.ovEffectiveRate)}</div></div>
-      </div>
-      <div class="profit-compare" style="color:${oh.text}">
-        <div class="compare-row"><span>Formula profit/day:</span><span style="font-weight:600">${fmt(c.profitPerDay)}</span></div>
-        <div class="compare-row"><span>Override profit/day:</span><span style="font-weight:700">${fmt(c.ovProfitPerDay)}</span></div>
-        <div class="compare-row" style="margin-top:4px;padding-top:4px;border-top:1px solid ${oh.border}"><span>Daily difference:</span><span style="font-weight:700;color:${c.ovProfitPerDay < c.profitPerDay ? '#991B1B' : '#065F46'}">${c.ovProfitPerDay < c.profitPerDay ? '-' : '+'}${fmt(Math.abs(c.ovProfitPerDay - c.profitPerDay))}</span></div>
-      </div>
-    </div>`;
-  } else {
-    html += `<div class="profit-box" style="background:${h.bg};border:1px solid ${h.border}">
-      <div class="profit-header"><h3 style="margin:0;font-size:15px;font-weight:700;color:${h.text}">Profitability</h3><span class="profit-badge" style="background:${h.border};color:${h.text}">${h.label}</span></div>
-      <div class="metrics-grid">
-        <div class="metric"><div class="metric-label" style="color:${h.text}">Gross Profit</div><div class="metric-value" style="color:${h.text}">${fmt(c.grossProfit)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${h.text}">Profit/Day</div><div class="metric-value" style="color:${h.text}">${fmt(c.profitPerDay)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${h.text}">Margin</div><div class="metric-value" style="color:${h.text}">${fmtPct(c.margin)}</div></div>
-        <div class="metric"><div class="metric-label" style="color:${h.text}">Effective $/Student/Session</div><div class="metric-value" style="color:${h.text}">${fmt(c.effectiveRate)}</div></div>
-      </div>
-    </div>`;
-  }
-
-  // Revenue Breakdown
-  html += `<div class="card"><h3 style="margin-bottom:12px">Revenue Breakdown</h3>
-    <div class="line-item"><span class="li-label">Program fees (${fmt(prog.rate)} × ${state.totalStudents} students × ${c.actualSessionsPerStudent} sessions)</span><span class="li-value">${fmt(c.baseStudentRevenue)}</span></div>
-    <div class="line-item"><span class="li-label">Travel fee (${fmt(c.travelFeePerDay)}/day × ${c.totalDeliveryDays} days)</span><span class="li-value">${fmt(c.totalTravelFee)}</span></div>`;
-  if (c.discountRate > 0) {
-    html += `<div class="line-item discount"><span class="li-label">${c.discountLabel}</span><span class="li-value">-${fmt(c.discountAmount)}</span></div>`;
-  }
-  html += `<div class="line-total"><span>Formula Total (GST inc.)</span><span>${fmt(c.totalQuote)}</span></div></div>`;
-
-  // Cost Breakdown
-  html += `<div class="card"><h3 style="margin-bottom:12px">Your Costs (Marginal)</h3>
-    <div class="line-item"><span class="li-label">Fuel (${state.distanceKm * 2}km RT × ${c.totalDeliveryDays} days)</span><span class="li-value">${fmt(c.totalFuel)}</span></div>
-    <div class="line-item"><span class="li-label">Meals (${c.totalDeliveryDays} days)</span><span class="li-value">${fmt(c.totalMeals)}</span></div>
-    <div class="line-item"><span class="li-label">Admin (booking & invoicing)</span><span class="li-value">${fmt(ADMIN_COST)}</span></div>`;
-  if (state.needsSecondInstructor) {
-    html += `<div class="line-item"><span class="li-label">Second instructor ($${CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE}/hr × ${state.instructorHoursPerDay}h × ${c.totalDeliveryDays}d)</span><span class="li-value">${fmt(c.secondInstructorCost)}</span></div>`;
-  }
-  if (state.includesCertificates) {
-    html += `<div class="line-item"><span class="li-label">Certificates (${state.totalStudents} students)</span><span class="li-value">${fmt(c.certificateCost)}</span></div>`;
-  }
-  html += `<div class="line-total cost"><span>Total Costs</span><span>${fmt(c.totalDirectCosts)}</span></div></div>`;
-
-  // Grant
-  if (state.grantAmount > 0) {
-    const useOvGrant = useOv;
-    const grantPrice = useOvGrant ? state.priceOverride : c.totalQuote;
-    const coversAll = useOvGrant ? c.ovGrantCoversAll : c.grantCoversAll;
-    const topUp = useOvGrant ? c.ovSchoolTopUp : c.schoolTopUp;
-    html += `<div class="grant-box"><h3 style="margin:0 0 12px;font-size:15px;font-weight:700;color:#065F46">Sporting Schools Grant</h3>
-      <div class="line-item"><span class="li-label">Grant Amount</span><span class="li-value">${fmt(state.grantAmount)}</span></div>
-      <div class="line-item"><span class="li-label">${useOvGrant ? 'Override Price' : 'Program Cost'}</span><span class="li-value">${fmt(grantPrice)}</span></div>
-      <div class="line-total grant">`;
-    if (coversAll) {
-      html += `<span style="color:#065F46">Grant covers full program — no top-up needed</span>`;
-    } else {
-      html += `<span style="color:#92400E">School Top-Up Required</span><span style="color:#92400E">${fmt(topUp)}</span>`;
-    }
-    html += `</div></div>`;
-  }
-
-  // Delivery Summary
-  html += `<div class="delivery-summary"><strong>Delivery:</strong> ${state.sessionsPerDay} session${state.sessionsPerDay > 1 ? 's' : ''}/day, ${state.daysPerWeek} day${state.daysPerWeek > 1 ? 's' : ''}/week for ${state.weeksInTerm} weeks = ${c.totalDeliveryDays} delivery days. Each of ${state.totalStudents} students receives ${c.actualSessionsPerStudent} × ${state.sessionLength}min sessions of ${prog.label}.`;
-  if (state.useCustomSessions && c.actualSessionsPerStudent < state.weeksInTerm) {
-    html += ` <span style="color:#E85D3A;font-weight:600">(Rotating schedule — students attend ${c.actualSessionsPerStudent} of ${state.weeksInTerm} available weeks)</span>`;
-  }
-  html += `</div>`;
-
-  html += `</div>`; // end right col
-  html += `</div></div>`; // end two-col, end calculator tab
-
-  document.getElementById('app').innerHTML = html;
+const HS={danger:{bg:'#FEE2E2',text:'#991B1B',border:'#FECACA',label:'Below Target'},warning:{bg:'#FEF3C7',text:'#92400E',border:'#FDE68A',label:'Marginal'},good:{bg:'#D1FAE5',text:'#065F46',border:'#A7F3D0',label:'Healthy'},excellent:{bg:'#CFFAFE',text:'#155E75',border:'#A5F3FC',label:'Excellent'}};
+function updVal(k,v){S[k]=v;updateResults();}
+function updNum(k,el,mn,isF){S[k]=Math.max(mn,isF?(parseFloat(el.value)||0):(parseInt(el.value)||0));updateResults();}
+function updCheck(k,v){S[k]=v;updateResults();}
+function toggleCustomSessions(c){S.useCustomSessions=c;document.getElementById('customSessionsFields').style.display=c?'block':'none';updateResults();}
+function toggleSecondInstructor(c){S.needsSecondInstructor=c;document.getElementById('secondInstructorFields').style.display=c?'block':'none';updateResults();}
+function toggleOverride(c){S.usePriceOverride=c;var card=document.getElementById('overrideCard'),f=document.getElementById('overrideFields'),t=document.getElementById('overrideTitle');card.classList.toggle('active',c);t.style.color=c?'#9A3412':'#0f3460';f.style.display=c?'block':'none';if(c&&S.priceOverride===0){S.priceOverride=Math.round(calculate().totalQuote);document.getElementById('in-priceOverride').value=S.priceOverride;}updateResults();}
+function switchTab(t){document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active')});document.getElementById('tab-'+t).classList.add('active');document.getElementById('content-'+t).classList.add('active');}
+function updateResults(){
+  var c=calculate(),p=CONFIG.programs[S.program],u=S.usePriceOverride,h=HS[c.profitHealth],oh=HS[c.ovPH],ph=u?oh:h;
+  if(S.useCustomSessions){document.getElementById('customSessionsHelper').textContent='You deliver '+S.sessionsPerDay+' sessions/day for '+S.weeksInTerm+' weeks, but each student only attends '+S.sessionsPerStudent+' session'+(S.sessionsPerStudent!==1?'s':'')+'.'}
+  if(u){var d=document.getElementById('overrideDiff');d.style.background=c.ovDiff<0?'#FEE2E2':'#D1FAE5';d.style.color=c.ovDiff<0?'#991B1B':'#065F46';d.textContent=c.ovDiff<0?fmt(Math.abs(c.ovDiff))+' below formula price ('+fmtPct(Math.abs(c.ovDiffPct))+' discount)':c.ovDiff>0?fmt(c.ovDiff)+' above formula price (+'+fmtPct(c.ovDiffPct)+')':'Matches formula price exactly';}
+  var r='<div class="quote-box"><p class="quote-label">'+(S.schoolName||'School')+' \u2014 '+(u?'Formula vs Override':'Total Quote')+'</p>';
+  if(u){r+='<div class="quote-compare"><div class="quote-formula"><div class="label">FORMULA</div><div class="amount">'+fmt(c.totalQuote)+'</div></div><div class="quote-override"><div class="label">OVERRIDE</div><div class="amount">'+fmt(S.priceOverride)+'</div><div class="gst">GST inc. ('+fmt(c.ovGst)+' GST)</div></div></div>';}
+  else{r+='<p class="quote-amount">'+fmt(c.totalQuote)+'</p><p class="quote-gst">GST inclusive ('+fmt(c.gstAmount)+' GST)</p>';if(c.needsMinimumAdjustment)r+='<div class="notice" style="background:rgba(232,184,58,0.2);border:1px solid rgba(232,184,58,0.3)">Small school minimum applied ('+fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)+'/day \u00d7 '+c.totalDeliveryDays+' days)</div>';}
+  r+='</div>';
+  r+='<div class="profit-box" style="background:'+ph.bg+';border:1px solid '+ph.border+'"><div class="profit-header"><h3 style="margin:0;font-size:15px;font-weight:700;color:'+ph.text+'">'+(u?'Override ':'')+'Profitability</h3><span class="profit-badge" style="background:'+ph.border+';color:'+ph.text+'">'+ph.label+'</span></div><div class="metrics-grid"><div class="metric"><div class="metric-label" style="color:'+ph.text+'">Gross Profit</div><div class="metric-value" style="color:'+ph.text+'">'+fmt(u?c.ovGP:c.grossProfit)+'</div></div><div class="metric"><div class="metric-label" style="color:'+ph.text+'">Profit/Day</div><div class="metric-value" style="color:'+ph.text+'">'+fmt(u?c.ovPPD:c.profitPerDay)+'</div></div><div class="metric"><div class="metric-label" style="color:'+ph.text+'">Margin</div><div class="metric-value" style="color:'+ph.text+'">'+fmtPct(u?c.ovMargin:c.margin)+'</div></div><div class="metric"><div class="metric-label" style="color:'+ph.text+'">Effective $/Student/Session</div><div class="metric-value" style="color:'+ph.text+'">'+fmt(u?c.ovER:c.effectiveRate)+'</div></div></div>';
+  if(u)r+='<div class="profit-compare" style="color:'+oh.text+'"><div class="compare-row"><span>Formula profit/day:</span><span style="font-weight:600">'+fmt(c.profitPerDay)+'</span></div><div class="compare-row"><span>Override profit/day:</span><span style="font-weight:700">'+fmt(c.ovPPD)+'</span></div><div class="compare-row" style="margin-top:4px;padding-top:4px;border-top:1px solid '+oh.border+'"><span>Daily difference:</span><span style="font-weight:700;color:'+(c.ovPPD<c.profitPerDay?'#991B1B':'#065F46')+'">'+(c.ovPPD<c.profitPerDay?'-':'+')+fmt(Math.abs(c.ovPPD-c.profitPerDay))+'</span></div></div>';
+  r+='</div>';
+  r+='<div class="card"><h3 style="margin-bottom:12px">Revenue Breakdown</h3><div class="line-item"><span class="li-label">Program fees ('+fmt(p.rate)+' \u00d7 '+S.totalStudents+' \u00d7 '+c.actualSessionsPerStudent+' sessions)</span><span class="li-value">'+fmt(c.baseStudentRevenue)+'</span></div><div class="line-item"><span class="li-label">Travel fee ('+fmt(c.travelFeePerDay)+'/day \u00d7 '+c.totalDeliveryDays+' days)</span><span class="li-value">'+fmt(c.totalTravelFee)+'</span></div>';
+  if(c.discountRate>0)r+='<div class="line-item discount"><span class="li-label">'+c.discountLabel+'</span><span class="li-value">-'+fmt(c.discountAmount)+'</span></div>';
+  r+='<div class="line-total"><span>Formula Total (GST inc.)</span><span>'+fmt(c.totalQuote)+'</span></div></div>';
+  r+='<div class="card"><h3 style="margin-bottom:12px">Your Costs (Marginal)</h3><div class="line-item"><span class="li-label">Fuel ('+(S.distanceKm*2)+'km RT \u00d7 '+c.totalDeliveryDays+' days)</span><span class="li-value">'+fmt(c.totalFuel)+'</span></div><div class="line-item"><span class="li-label">Meals ('+c.totalDeliveryDays+' days)</span><span class="li-value">'+fmt(c.totalMeals)+'</span></div><div class="line-item"><span class="li-label">Admin (booking & invoicing)</span><span class="li-value">'+fmt(ADMIN_COST)+'</span></div>';
+  if(S.needsSecondInstructor)r+='<div class="line-item"><span class="li-label">Second instructor ($'+CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE+'/hr \u00d7 '+S.instructorHoursPerDay+'h \u00d7 '+c.totalDeliveryDays+'d)</span><span class="li-value">'+fmt(c.secondInstructorCost)+'</span></div>';
+  if(S.includesCertificates)r+='<div class="line-item"><span class="li-label">Certificates ('+S.totalStudents+' students)</span><span class="li-value">'+fmt(c.certificateCost)+'</span></div>';
+  r+='<div class="line-total cost"><span>Total Costs</span><span>'+fmt(c.totalDirectCosts)+'</span></div></div>';
+  if(S.grantAmount>0){var gp=u?S.priceOverride:c.totalQuote,ca=u?c.ovGrantCoversAll:c.grantCoversAll,tu=u?c.ovSchoolTopUp:c.schoolTopUp;r+='<div class="grant-box"><h3 style="margin:0 0 12px;font-size:15px;font-weight:700;color:#065F46">Sporting Schools Grant</h3><div class="line-item"><span class="li-label">Grant Amount</span><span class="li-value">'+fmt(S.grantAmount)+'</span></div><div class="line-item"><span class="li-label">'+(u?'Override Price':'Program Cost')+'</span><span class="li-value">'+fmt(gp)+'</span></div><div class="line-total grant">'+(ca?'<span style="color:#065F46">Grant covers full program \u2014 no top-up needed</span>':'<span style="color:#92400E">School Top-Up Required</span><span style="color:#92400E">'+fmt(tu)+'</span>')+'</div></div>';}
+  r+='<div class="delivery-summary"><strong>Delivery:</strong> '+S.sessionsPerDay+' session'+(S.sessionsPerDay>1?'s':'')+'/day, '+S.daysPerWeek+' day'+(S.daysPerWeek>1?'s':'')+'/week for '+S.weeksInTerm+' weeks = '+c.totalDeliveryDays+' delivery days. Each of '+S.totalStudents+' students receives '+c.actualSessionsPerStudent+' \u00d7 '+S.sessionLength+'min sessions of '+p.label+'.';
+  if(S.useCustomSessions&&c.actualSessionsPerStudent<S.weeksInTerm)r+=' <span style="color:#E85D3A;font-weight:600">(Rotating schedule \u2014 students attend '+c.actualSessionsPerStudent+' of '+S.weeksInTerm+' available weeks)</span>';
+  r+='</div>';
+  document.getElementById('resultsColumn').innerHTML=r;
 }
-
-function upd(key, value) {
-  state[key] = value;
-  render();
+function renderStaticTabs(){
+  var sel=document.getElementById('in-program');
+  for(var k in CONFIG.programs){var v=CONFIG.programs[k];var o=document.createElement('option');o.value=k;o.textContent=v.label+' \u2014 '+fmt(v.rate)+'/student/session';sel.appendChild(o);}
+  var rc='<div class="card"><h2>Program Rates (per student per session, GST inclusive)</h2>';
+  for(var k in CONFIG.programs){var p=CONFIG.programs[k];rc+='<div class="rate-item"><div><span class="rate-dot" style="background:'+p.color+'"></span><span class="rate-label">'+p.label+'</span></div><div><span class="rate-meta">~'+p.equipmentMinutes+' min equip. time</span><span class="rate-price" style="color:'+p.color+'">'+fmt(p.rate)+'</span></div></div>';}
+  rc+='</div><div class="card"><h2>Travel & Delivery Fees</h2><p style="font-size:13px;color:#64748b;margin-bottom:12px">Charged per delivery day. Based on round-trip distance \u00d7 ~$'+(FUEL_COST_PER_KM*1.5).toFixed(2)+'/km (fuel + vehicle wear).</p>';
+  CONFIG.distanceBands.forEach(function(b){rc+='<div class="rate-item"><span style="font-weight:500;font-size:14px">'+b.label+'</span><span style="font-weight:600">~'+fmt(Math.max(b.maxKm*2*FUEL_COST_PER_KM*1.5,15))+'/day</span></div>';});
+  rc+='</div><div class="card"><h2>Discounts & Adjustments</h2>';
+  [{l:'Repeat Customer Discount',v:'5% off total',n:'For returning schools with 2+ terms history'},{l:'In-Centre Delivery',v:'10% off total',n:'School travels to Invert Sports Centre'},{l:'Small School Minimum',v:fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)+'/day',n:'Minimum daily rate for schools under '+CONFIG.SMALL_SCHOOL_THRESHOLD+' students'},{l:'Second Instructor',v:'$'+CONFIG.SECOND_INSTRUCTOR_HOURLY_RATE+'/hr added',n:'Required for 150+ student programs'},{l:'Completion Certificates',v:'~'+fmt(CONFIG.CERTIFICATE_COST_PER_STUDENT)+'/student',n:'Gymnastics programs, included by default'}].forEach(function(a){rc+='<div class="rate-item" style="flex-direction:column;align-items:stretch"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:14px">'+a.l+'</span><span style="font-weight:600;color:#0f3460">'+a.v+'</span></div><p style="margin:4px 0 0;font-size:12px;color:#94a3b8">'+a.n+'</p></div>';});
+  rc+='</div><div class="card"><h2>Ad Hoc Services</h2><div class="rate-item"><span style="font-weight:600">Athletics Carnival Assistance</span><span style="font-weight:700;color:#E8B83A">'+fmt(CONFIG.CARNIVAL_ASSISTANCE_DAY_RATE)+'/day</span></div><div class="rate-item"><span style="font-weight:600">Teacher Professional Development</span><span style="font-weight:600;color:#64748b">Quote on request</span></div><div class="rate-item"><span style="font-weight:600">Combined Schools Sports Day</span><span style="font-weight:600;color:#64748b">Quote on request</span></div></div>';
+  document.getElementById('content-rates').innerHTML=rc;
+  var g='<div class="card"><h2>How the Pricing Works</h2><div class="info-text"><p><strong>The formula:</strong> (Program Rate \u00d7 Students \u00d7 Sessions) + (Travel Fee \u00d7 Delivery Days) \u2212 Discounts = Total Quote</p><p><strong>Program Rate</strong> covers coaching, curriculum, and equipment. Gymnastics costs the most (~75 min extra equipment time per visit). Athletics costs the least (schools supply most equipment).</p><p><strong>Travel Fee</strong> covers fuel (~$'+FUEL_COST_PER_KM.toFixed(2)+'/km) with a markup for vehicle wear. Charged per delivery day across the term.</p><p><strong>Small School Minimum:</strong> Schools under '+CONFIG.SMALL_SCHOOL_THRESHOLD+' students are charged a minimum of '+fmt(CONFIG.SMALL_SCHOOL_MINIMUM_PER_DAY)+'/delivery day.</p><p><strong>Sporting Schools Grant:</strong> Enter the school\u2019s grant amount to see how much they need to top up.</p></div></div>';
+  g+='<div class="guide-box"><h3>Profitability Guide</h3><p class="guide-item"><span class="guide-label" style="color:#991B1B">Below $200/day</span> \u2014 losing money once salary is considered. Avoid unless strategically important.</p><p class="guide-item"><span class="guide-label" style="color:#92400E">$200\u2013$400/day</span> \u2014 marginal. Covers costs but below target.</p><p class="guide-item"><span class="guide-label" style="color:#065F46">$400\u2013$600/day</span> \u2014 healthy. Target range for standard bookings.</p><p class="guide-item"><span class="guide-label" style="color:#155E75">$600+/day</span> \u2014 excellent. Large schools and multi-session days.</p></div>';
+  document.getElementById('content-guide').innerHTML=g;
 }
-
-function switchTab(tab) {
-  state.activeTab = tab;
-  render();
-}
-
-function toggleOverride(checked) {
-  state.usePriceOverride = checked;
-  if (checked && state.priceOverride === 0) {
-    state.priceOverride = Math.round(calculate().totalQuote);
-  }
-  render();
-}
-
-// Initial render
-render();
+renderStaticTabs();
+updateResults();
 </script>
 </body>
 </html>
